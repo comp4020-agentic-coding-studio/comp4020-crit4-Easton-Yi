@@ -3,21 +3,24 @@ import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout
-  title="COMP4020 prototype"
-  description="Replace this with one sentence saying what this page is. A search result and a link preview both show it."
+  title="Echo Garden"
+  description="A browser instrument you play, not read — touch the dark or press any letter and it sings back."
 >
-  <header>
+  <header class="sr-only">
     <nav aria-label="Primary">
       <a href="./">Home</a>
     </nav>
   </header>
   <main>
-    <h1>COMP4020 prototype</h1>
-    <p data-testid="intro">
-      Replace this with your prototype. This week's brief is on the course
-      website; <code>spec/README.md</code> explains how the checks in this repo
-      relate to it.
+    <p class="sr-only">
+      Echo Garden — an interactive browser instrument. Touch, click, drag or
+      press any letter key to play a live-synthesised note.
     </p>
+    <div class="opening" data-opening>
+      <h1>Touch the dark</h1>
+      <p class="opening-secondary">or press any letter</p>
+    </div>
+    <canvas id="instrument-surface" aria-hidden="true"></canvas>
   </main>
   <script src="../scripts/main.ts"></script>
 </Layout>
