@@ -1,5 +1,9 @@
 # Process overview
 
+## Deployed url
+
+https://comp4020-agentic-coding-studio.github.io/comp4020-crit4-Easton-Yi/
+
 ## What I built
 
 Echo Garden: a browser instrument with no manual. The first tap, click, or
