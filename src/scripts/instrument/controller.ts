@@ -3,16 +3,25 @@
 // starts a voice and captures the pointer; keyboard keydown/keyup start and
 // release a note per key, ignoring repeats and browser-shortcut modifiers.
 import type { AudioEngine } from "../audio/engine";
-import { frequencyForKey, frequencyForPosition, positionForKey } from "../audio/scale";
+import {
+  frequencyForPosition,
+  hueForFrequency,
+  keyboardPositionForKey,
+} from "../audio/scale";
 import type { GardenRenderer } from "../visuals/renderer";
 
-const CENTER_Y = 0.5; // vertical (timbre) mapping is stage 2
+// A player has (at most) ten fingers — cap concurrently held keyboard notes
+// there so a forearm on the keys or a stuck key doesn't pile up voices
+// forever. Pointers/touches are already bounded by the AudioEngine's own
+// voice cap, keyed independently by pointerId.
+const MAX_CONCURRENT_KEYS = 10;
 
 export class InstrumentController {
   private readonly surface: HTMLElement;
   private readonly audio: AudioEngine;
   private readonly renderer: GardenRenderer;
   private readonly heldKeys = new Set<string>();
+  private readonly heldKeyOrder: string[] = [];
   private onFirstSound: (() => void) | undefined;
   private firstSoundFired = false;
 
@@ -42,9 +51,15 @@ export class InstrumentController {
       const y = event.clientY / window.innerHeight;
       const frequency = frequencyForPosition(x);
 
-      this.surface.setPointerCapture(event.pointerId);
+      try {
+        this.surface.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture can fail (e.g. a pointer id the browser no longer
+        // considers active) — the note must still play; capture only keeps
+        // events flowing if the finger later drags off the surface.
+      }
       this.audio.noteOn(id, frequency);
-      this.renderer.addBloom(id, x, y);
+      this.renderer.addBloom(id, x, y, hueForFrequency(frequency));
       this.fireFirstSound();
     });
 
@@ -66,35 +81,42 @@ export class InstrumentController {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.repeat) return;
 
-      const frequency = frequencyForKey(event.key);
-      const position = positionForKey(event.key);
-      if (frequency === undefined || position === undefined) return;
+      const position = keyboardPositionForKey(event.key);
+      if (!position) return;
 
       const id = `key-${event.key.toLowerCase()}`;
       if (this.heldKeys.has(id)) return;
-      this.heldKeys.add(id);
 
+      if (this.heldKeyOrder.length >= MAX_CONCURRENT_KEYS) {
+        this.releaseKey(this.heldKeyOrder[0]);
+      }
+
+      this.heldKeys.add(id);
+      this.heldKeyOrder.push(id);
+
+      const frequency = frequencyForPosition(position.x);
       this.audio.noteOn(id, frequency);
-      this.renderer.addBloom(id, position, CENTER_Y);
+      this.renderer.addBloom(id, position.x, position.y, hueForFrequency(frequency));
       this.fireFirstSound();
     });
 
     window.addEventListener("keyup", (event) => {
-      const id = `key-${event.key.toLowerCase()}`;
-      if (!this.heldKeys.has(id)) return;
-      this.heldKeys.delete(id);
-      this.audio.noteOff(id);
-      this.renderer.releaseBloom(id);
+      this.releaseKey(`key-${event.key.toLowerCase()}`);
     });
 
     // A key can lose its keyup if focus moves elsewhere first — release
     // anything still held rather than leaving a hanging note.
     window.addEventListener("blur", () => {
-      for (const id of this.heldKeys) {
-        this.audio.noteOff(id);
-        this.renderer.releaseBloom(id);
-      }
-      this.heldKeys.clear();
+      for (const id of [...this.heldKeyOrder]) this.releaseKey(id);
     });
+  }
+
+  private releaseKey(id: string): void {
+    if (!this.heldKeys.has(id)) return;
+    this.heldKeys.delete(id);
+    const orderIndex = this.heldKeyOrder.indexOf(id);
+    if (orderIndex !== -1) this.heldKeyOrder.splice(orderIndex, 1);
+    this.audio.noteOff(id);
+    this.renderer.releaseBloom(id);
   }
 }

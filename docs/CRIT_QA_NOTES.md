@@ -6,10 +6,14 @@ risks. It is not a substitute for the official contract in `CRIT_BRIEF.md`.
 ## Current status
 
 - Stage: 1 (first playable vertical slice) complete. Stages 2–5 not started.
+  Within Stage 1, the keyboard mapping was reworked so each letter key sits at
+  its real QWERTY screen position and shares the pointer's pitch function
+  (`frequencyForPosition`), and a 10-key concurrency cap with oldest-key
+  eviction was added (`MAX_CONCURRENT_KEYS` in `controller.ts`).
 - Build: `pnpm build` succeeds; `dist/` contains only `index.html`, one bundled
   script, and `card.png` — no audio assets.
 - Full checks: `pnpm check` green (`astro check`: 0 errors; build succeeds;
-  `vitest run`: 21/21 passing across 3 files).
+  `vitest run`: 29/29 passing across 4 files).
 - Desktop manual test: pass (Playwright Chromium at 1920×1080 — see below).
 - Mobile manual test: pass on the Chrome DevTools 390×844 preset via
   Playwright with `hasTouch: true`; **not yet tested on a physical phone**.
@@ -50,11 +54,47 @@ Record the exact command and result after each meaningful stage.
 - Commit: working tree (not yet committed)
 - Command: `pnpm check` (runs `astro check`, `astro build`, `vitest run`)
 - Result: pass — `astro check`: 0 errors/warnings/hints; build: 1 page built;
-  vitest: 3 files, 21 tests, all passing
+  vitest: 4 files, 29 tests, all passing (added `spec/crit-4-scale.test.ts`
+  for the QWERTY keyboard-position mapping)
 - Relevant output: `dist/` contains `index.html`, one bundled JS file, and
   `card.png` only — no audio assets
 - Follow-up: run `pnpm check:evidence` once `PROCESS.md` and
   `reflections/crit-4.md` are written (deferred per instruction)
+
+### Multi-input verification (Playwright, 1920×1080)
+
+Prompted by "is it possible to make multi-key/mouse touch at the same time?".
+Confirmed the existing per-id voice/bloom architecture already supports
+concurrent independent inputs; found and fixed one real bug along the way.
+
+- Three keys held simultaneously (`q`, `p`, `g`): three independent blooms
+  rendered at the correct QWERTY-mapped screen positions (q top-left, p
+  top-right, g centre/home-row) — screenshot inspected, matches expectation.
+- Two simultaneous touches (synthetic `PointerEvent`s with distinct
+  `pointerId`s dispatched on `#instrument-surface`): **initially failed** —
+  `surface.setPointerCapture(event.pointerId)` threw
+  `NotFoundError: Failed to execute 'setPointerCapture' on 'Element': No
+  active pointer with the given id is found.`, and because that call ran
+  before `noteOn`/`addBloom` in `bindPointer()`, the thrown error skipped both
+  — no sound, no bloom, for a pointer id the browser didn't consider "active"
+  when capture was requested. Fixed by wrapping the capture call in
+  `try/catch` in `src/scripts/instrument/controller.ts` (capture is a
+  best-effort convenience for drags off the surface, not required for the
+  note to fire). Re-ran after the fix: zero console/page errors, both touches
+  produced independent blooms at their respective x/y positions — screenshot
+  confirms two separate blooms, one per synthetic pointer id.
+- Twelve keys held (exceeding `MAX_CONCURRENT_KEYS = 10`): no crash; the
+  screenshot shows more than 10 blooms visible at once, which is correct, not
+  a bug — the 10-key cap evicts the *oldest held key's note*, but eviction
+  triggers the same 800ms release fade as a normal key-up, so an evicted
+  key's bloom is still visibly fading out at the moment of the screenshot
+  rather than vanishing instantly.
+- Caveat: synthetic `PointerEvent` dispatch (via `page.evaluate` +
+  `dispatchEvent`) is not identical to a real OS-originated touch event —
+  Chromium's native multi-touch input pipeline was not exercised here. This
+  found a real code path issue (the capture bug above), which is reassuring,
+  but a physical multi-touch device still has not been tested (see "Known
+  issues and decisions").
 
 ### Required checks
 
@@ -168,7 +208,11 @@ Expected:
 - release of one finger does not stop the others;
 - master output remains controlled.
 
-Observed:
+Observed: Verified via Playwright with two synthetic simultaneous pointers
+(see "Multi-input verification" above) — independent blooms, independent
+voice ids (`pointer-<id>`), releasing one leaves the other sounding (each
+`pointerup` only calls `noteOff`/`releaseBloom` for its own id). **Not yet
+verified on real multi-touch hardware.**
 
 ### Keyboard phrase
 
@@ -180,7 +224,13 @@ Expected:
 - browser shortcuts remain available;
 - lost focus does not leave hanging notes.
 
-Observed:
+Observed: Holding `q`, `p`, `g` together produced three distinct, sustained
+pitches at their QWERTY-mapped positions with no interruption of one another.
+Holding 12 keys at once exercised the new 10-key cap: the oldest held key is
+evicted (faded and stopped) once an 11th key is pressed, so the total never
+exceeds 10 concurrently *sounding* notes, though a just-evicted key's bloom
+remains visible for its ~0.8s release fade. `blur` handling (tab/window
+losing focus) was built in Stage 1 and not re-tested this round.
 
 ## Cold-play test
 
@@ -337,6 +387,8 @@ Record meaningful problems, not every cosmetic possibility.
 | No `visibilitychange` handling | A pointer held down when the tab is hidden keeps its voice sounding until released | Deferred to Stage 2/4 (`CRIT_BRIEF.md` lists this under later stages); `blur` already covers the keyboard case | Open |
 | No pointer-move / drag mapping yet | Dragging currently does nothing after the initial note — pitch is fixed at the pointer-down position | Correct for Stage 1 scope (brief: "pointer down starts a quantised note; pointer up releases it"); horizontal/vertical mapping during drag is explicitly Stage 2 | Open (by design) |
 | Not tested on a physical phone | Chrome DevTools' 390×844 preset and Playwright touch emulation don't prove real touch/audio behaviour on a device | Test on a physical phone before the cutoff, per the template's own note in this file | Open |
+| Not tested on real multi-touch hardware | Multi-touch was verified with synthetic `PointerEvent`s dispatched in a headless browser, not genuine simultaneous OS-level touches | Test two-finger (and more) chords on a physical touchscreen before the cutoff — same gap as the phone item above, called out separately because it's a distinct input path | Open |
+| `setPointerCapture` could throw and silently drop a note (fixed) | Found while building the multi-touch test above: `setPointerCapture` on a pointer id the browser doesn't consider active throws `NotFoundError`, and it ran before `noteOn`/`addBloom`, so a capture failure meant no sound at all for that gesture | Wrapped the call in `try/catch` in `controller.ts` — capture is a nice-to-have for drags off the surface, not required for the note to fire | Fixed |
 | Not listened to by a human | Click-freedom and "does it actually sound good" can't be verified by an automated/headless run | Do a real listening pass (desktop + phone speakers) before the crit | Open |
 | `card.png` / description not customised for Echo Garden | `og:image` still points at the generic starter card image | Description meta was updated to describe Echo Garden; the card image itself was left untouched — cosmetic, not a contract requirement (invariant only checks presence) | Open |
 
