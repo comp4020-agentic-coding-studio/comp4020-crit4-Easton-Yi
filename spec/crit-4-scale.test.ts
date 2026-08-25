@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   frequencyForKey,
   frequencyForPosition,
+  hueForFrequency,
   keyboardPositionForKey,
   scaleFrequencies,
 } from "../src/scripts/audio/scale";
@@ -66,6 +67,34 @@ describe("frequencyForKey", () => {
     const scale = scaleFrequencies();
     for (const letter of "qwertyuiopasdfghjklzxcvbnm") {
       expect(scale).toContain(frequencyForKey(letter));
+    }
+  });
+});
+
+describe("hueForFrequency", () => {
+  it("gives the lowest note in the scale the cyan end of the range", () => {
+    const scale = scaleFrequencies();
+    expect(hueForFrequency(scale[0])).toBe(180);
+  });
+
+  it("gives the highest note in the scale the magenta end of the range", () => {
+    const scale = scaleFrequencies();
+    expect(hueForFrequency(scale[scale.length - 1])).toBe(360);
+  });
+
+  it("increases monotonically as pitch rises through the scale", () => {
+    const scale = scaleFrequencies();
+    const hues = scale.map((frequency) => hueForFrequency(frequency));
+    for (let i = 1; i < hues.length; i++) {
+      expect(hues[i]).toBeGreaterThan(hues[i - 1]);
+    }
+  });
+
+  it("stays within the 180–360 hue range for every note two input paths can produce", () => {
+    for (const letter of "qwertyuiopasdfghjklzxcvbnm") {
+      const hue = hueForFrequency(frequencyForKey(letter)!);
+      expect(hue).toBeGreaterThanOrEqual(180);
+      expect(hue).toBeLessThanOrEqual(360);
     }
   });
 });

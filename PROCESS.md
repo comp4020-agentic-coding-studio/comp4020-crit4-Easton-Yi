@@ -1,85 +1,35 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-One paragraph: the thing, and the idea behind it.
+Echo Garden: a browser instrument with no manual. The first tap, click, or
+letter key resumes one shared `AudioContext` and immediately sings a
+live-synthesised, pentatonic-quantised note, with a firework of small sparks
+bursting from that spot, coloured by the note's pitch. Every input source —
+mouse, touch, keyboard — shares the same pitch mapping, so a key's screen
+position and a touch at that position always sound the same note, and
+multiple fingers or keys sound independent, simultaneous voices.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+Stress-testing multi-touch with two simultaneous synthetic pointers surfaced
+a real bug: `setPointerCapture` can throw `NotFoundError`, and that call ran
+*before* `noteOn`/`addBloom` in the pointer handler, so a capture failure
+silently killed the note — no sound, no visual, for a gesture the player
+made correctly. The obvious fix would have been to keep testing until it
+"passed," but the actual defect was ordering: capture is a convenience for
+drags off the surface, not a precondition for sound, so I wrapped it in
+`try/catch` instead of chasing why the synthetic event wasn't "active enough"
+([`66149f2`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-Easton-Yi/commit/66149f2)).
+Re-running the same two-pointer test afterwards, with zero console errors and
+two independent bursts on screen, is what told me it had actually landed, not
+just gone quiet.
 
-1. **what happened** --- the problem, or the thing that went wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
-
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** --- the standards and checks your work has to satisfy
---- rather than in a retry: a rule added to `CLAUDE.md`, a check wired up, an
-attempt thrown away. Retrying until it passes is the routine case, and changing
-what the work runs against is the skilled one.
-
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
-
-### A worked moment, for shape
-
-Delete this section along with the rest of the boilerplate --- it's here to show
-the four jobs in one paragraph, not to be imitated in content.
-
-> The date formatter kept coming back with `toLocaleDateString()` and no locale
-> argument, so the same build rendered differently on my machine and in CI. I'd
-> already re-prompted it twice, which fixed the line but not the habit, so the
-> third time I put the rule in `CLAUDE.md` instead
-> ([`3f9ac21`](https://github.com/YOUR-ORG/YOUR-REPO/commit/3f9ac21)) and added
-> a spec test that fails on a bare `toLocaleDateString`. That's what told me it
-> had actually taken: the test went red against the old code and green against
-> the new, and the next two features it wrote passed it without prompting
-> ([`3f9ac21...b7e0d14`](https://github.com/YOUR-ORG/YOUR-REPO/compare/3f9ac21...b7e0d14)).
-
-## Before you ship
-
-`pnpm check:evidence` verifies your citations resolve to real commits, that a
-reflection entry the marker reads is in `reflections/`, and that your
-`CLAUDE.md` is there --- before a marker ever opens the file. It checks that
-your map is traceable, not that it is good: the marker judges whether your
-small, deliberately chosen set of moments shows real judgement and reflection. A
-green check is not a substitute for that curation.
-
-Images aren't checked: whether one renders is visible the moment you look. Open
-this file on GitHub and look at it before you ship.
+The keyboard mapping was the other judgement call: the first design
+([`838b43a`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-Easton-Yi/commit/838b43a))
+mapped a key to a pitch by character code, arbitrary and disconnected from
+the screen. I replaced it so `frequencyForKey` derives its note from the
+exact same
+`frequencyForPosition` a pointer touch would use at that key's real QWERTY
+screen position, so the two input paths can never drift apart
+([`66149f2`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-Easton-Yi/commit/66149f2)).
